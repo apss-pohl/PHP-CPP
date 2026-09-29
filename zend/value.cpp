@@ -891,9 +891,9 @@ bool Value::isCallable(const char *name)
     bool result = func->common.scope == zend_ce_closure && zend_string_equals_cstr(methodname.value(), ZEND_INVOKE_FUNC_NAME, ::strlen(ZEND_INVOKE_FUNC_NAME));
 #endif
 
-    // in method_exists(), there is also a zend_string_release() call here, but I dont think we
-    // need it here, because the methodname is already cleanup by the destructor of the LowerCase class
-    //zend_string_release(func->common.function_name);
+    // the trampoline owns a reference to its name (see DelayedRelease in classimpl.cpp),
+    // release it just like method_exists() does
+    zend_string_release(func->common.function_name);
 
     // free resources, just like method_exists() does
     zend_free_trampoline(func);

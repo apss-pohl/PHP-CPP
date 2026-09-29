@@ -97,6 +97,39 @@ struct CallData
 };
 
 /**
+ *  Releases the function name of one of our trampolines when the handler
+ *  falls out of scope. Every trampoline owns one reference to its name, just
+ *  like the ones from zend_get_call_trampoline_func(): whoever disposes of the
+ *  trampoline (our handlers, method_exists(), zend_release_fcall_info_cache(),
+ *  the cleanup of unfinished calls) releases it exactly once.
+ */
+class DelayedRelease
+{
+private:
+    /**
+     *  The string to release
+     *  @var zend_string*
+     */
+    zend_string *_string;
+
+public:
+    /**
+     *  Constructor
+     *  @param  string      String that will be released on destruction
+     */
+    DelayedRelease(zend_string *string) : _string(string) {}
+
+    /**
+     *  Destructor
+     */
+    virtual ~DelayedRelease()
+    {
+        // release our reference
+        zend_string_release(_string);
+    }
+};
+
+/**
  *  Handler function that runs the __call function
  *  @param  ...     All normal parameters for function calls
  */
@@ -114,6 +147,10 @@ void ClassImpl::callMethod(INTERNAL_FUNCTION_PARAMETERS)
     // getStaticMethod functions, we no longer need it when the function falls
     // out of scope
     DelayedFree df(data);
+
+    // the same goes for our reference to the function name (declared after
+    // df, so it is released before the structure holding it is freed)
+    DelayedRelease dr(func->function_name);
 
     // the function could throw an exception
     try
@@ -154,10 +191,12 @@ void ClassImpl::callInvoke(INTERNAL_FUNCTION_PARAMETERS)
     // get self reference
     ClassBase *meta = data->self->_base;
 
-    // the data structure was allocated by ourselves in the getMethod or
-    // getStaticMethod functions, we no longer need it when the function falls
-    // out of scope
+    // the data structure was allocated by ourselves in the getClosure
+    // function, we no longer need it when the function falls out of scope
     DelayedFree df(data);
+
+    // the same goes for the "__invoke" name that getClosure() allocated
+    DelayedRelease dr(data->func.function_name);
 
     // the function could throw an exception
     try
@@ -234,7 +273,7 @@ zend_function *ClassImpl::getMethod(zend_object **object, zend_string *method, c
     function->arg_flags[1]      = 0;
     function->arg_flags[2]      = 0;
     function->fn_flags          = ZEND_ACC_CALL_VIA_HANDLER;
-    function->function_name     = method;
+    function->function_name     = zend_string_copy(method);     // owned by the trampoline, see DelayedRelease
     function->scope             = entry;
     function->prototype         = nullptr;
     function->num_args          = 0;
@@ -281,7 +320,7 @@ zend_function *ClassImpl::getStaticMethod(zend_class_entry *entry, zend_string *
     function->arg_flags[1]      = 0;
     function->arg_flags[2]      = 0;
     function->fn_flags          = ZEND_ACC_CALL_VIA_HANDLER;
-    function->function_name     = nullptr;
+    function->function_name     = zend_string_copy(method);     // owned by the trampoline, see DelayedRelease
     function->scope             = nullptr;
     function->prototype         = nullptr;
     function->num_args          = 0;
