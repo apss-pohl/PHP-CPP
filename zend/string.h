@@ -25,6 +25,20 @@ namespace Php {
 
 /**
  *  Wrapper class for a zend_string
+ *
+ *  The strings are allocated with request lifetime. This matters: the engine
+ *  calls that we hand these strings to may pass them on to userspace, which
+ *  is free to keep them. Looking up a class, for example, runs the autoloader,
+ *  and an autoloader may remember the name it was given (composer collects the
+ *  classes it could not find). The name then ends up as a key in an ordinary
+ *  request array, and the engine releases such a key with
+ *  zend_string_release_ex(key, 0), which hands the pointer to efree(). A
+ *  persistent string comes from malloc(), so that call corrupts the heap and
+ *  PHP dies with "zend_mm_heap corrupted" when it tears the request down.
+ *
+ *  Data that has to outlive the request (module constants, class names
+ *  registered during module startup) does not go through this class; it calls
+ *  zend_string_init(..., 1) itself.
  */
 class String
 {
@@ -51,14 +65,14 @@ public:
      *
      *  @param  string  The string to wrap
      */
-    String(const std::string &string) : _string(zend_string_init(string.data(), string.size(), 1)) {}
+    String(const std::string &string) : _string(zend_string_init(string.data(), string.size(), 0)) {}
 
     /**
      *  Constructor
      *
      *  @param  string  The string to wrap
      */
-    String(const char *string) : _string(zend_string_init(string, std::strlen(string), 1)) {}
+    String(const char *string) : _string(zend_string_init(string, std::strlen(string), 0)) {}
 
     /**
      *  Constructor
@@ -66,7 +80,7 @@ public:
      *  @param  string  The string to wrap
      *  @param  size    Number of bytes in the string
      */
-    String(const char *string, size_t size) : _string(zend_string_init(string, size, 1)) {}
+    String(const char *string, size_t size) : _string(zend_string_init(string, size, 0)) {}
 
     /**
      *  Constructor
@@ -74,7 +88,7 @@ public:
      *  @param  string  The string to wrap
      */
     template <size_t size>
-    String(const char (&string)[size]) : _string(zend_string_init(string, size - 1, 1)) {}
+    String(const char (&string)[size]) : _string(zend_string_init(string, size - 1, 0)) {}
 
     /**
      *  Copy constructor
