@@ -29,11 +29,15 @@ Global::Global(Global &&global) _NOEXCEPT :
 /**
  *  Constructor for non-existing var
  *
+ *  The name is allocated with request lifetime, because update() installs it
+ *  as a key in EG(symbol_table); the engine releases the keys of that table
+ *  with the request allocator, so a persistent name would corrupt the heap.
+ *
  *  @param  name    Name for the variable that does not exist
  */
 Global::Global(const char *name) :
     Value(),
-    _name(zend_string_init(name, ::strlen(name), 1)),
+    _name(zend_string_init(name, ::strlen(name), 0)),
     _exists(false) {}
 
 /**
@@ -42,7 +46,7 @@ Global::Global(const char *name) :
  */
 Global::Global(const std::string &name) :
     Value(),
-    _name(zend_string_init(name.data(), name.size(), 1)),
+    _name(zend_string_init(name.data(), name.size(), 0)),
     _exists(false) {}
 
 /**
@@ -52,7 +56,7 @@ Global::Global(const std::string &name) :
  */
 Global::Global(const char *name, struct _zval_struct *val) :
     Value(val, true),
-    _name(zend_string_init(name, ::strlen(name), 1)),
+    _name(zend_string_init(name, ::strlen(name), 0)),
     _exists(true) {}
 
 /**
@@ -62,7 +66,7 @@ Global::Global(const char *name, struct _zval_struct *val) :
  */
 Global::Global(const std::string &name, struct _zval_struct *val) :
     Value(val, true),
-    _name(zend_string_init(name.data(), name.size(), 1)),
+    _name(zend_string_init(name.data(), name.size(), 0)),
     _exists(true) {}
 
 /**
