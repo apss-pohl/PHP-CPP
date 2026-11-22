@@ -92,7 +92,7 @@ public:
         state.rethrow();
 
         // we're ready if there is no return value
-        if (ZVAL_IS_NULL(&retval)) return nullptr;
+        if (Z_ISNULL_P(&retval)) return nullptr;
 
         // wrap the return value
         Value result(&retval);
