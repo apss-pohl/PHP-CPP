@@ -408,7 +408,8 @@ Value& Value::operator=(struct _zval_struct* value)
     if (Z_ISREF_P(to))      to    = Z_REFVAL_P(to);
 
     // check if we are allowed to update this value
-    if (Z_IMMUTABLE_P(to)) throw Exception("Cannot assign to an immutable variable");
+    // An immutable array is IS_ARRAY without the refcounted flag (Z_IMMUTABLE_P, removed in PHP 8.6)
+    if (Z_TYPE_INFO_P(to) == IS_ARRAY) throw Exception("Cannot assign to an immutable variable");
 
     // If the destination is refcounted
     if (Z_REFCOUNTED_P(to))
@@ -432,7 +433,7 @@ Value& Value::operator=(struct _zval_struct* value)
         {
             // If reference count is greater than 1, we need to separate zval
             // This is the optimized version of SEPARATE_ZVAL_NOREF()
-            if (Z_COPYABLE_P(to))
+            if (Z_TYPE_P(to) == IS_ARRAY)
             {
                 // this will decrement the reference count and invoke GC_ZVAL_CHECK_FOR_POSSIBLE_ROOT()
                 zval_ptr_dtor(to);
@@ -442,7 +443,7 @@ Value& Value::operator=(struct _zval_struct* value)
         else
         {
             // Destroy the current value of the variable and free up resources
-            zval_dtor(to);
+            zval_ptr_dtor_nogc(to);
         }
     }
 
@@ -539,7 +540,7 @@ Value &Value::operator=(char value)
 
     ZVAL_STRINGL(&z, &value, 1);
     operator=(&z);
-    zval_dtor(&z);
+    zval_ptr_dtor_nogc(&z);
     return *this;
 }
 
@@ -560,7 +561,7 @@ Value &Value::operator=(const std::string &value)
     }
 
     operator=(&z);
-    zval_dtor(&z);
+    zval_ptr_dtor_nogc(&z);
     return *this;
 }
 
@@ -581,7 +582,7 @@ Value &Value::operator=(const char *value)
     }
 
     operator=(&z);
-    zval_dtor(&z);
+    zval_ptr_dtor_nogc(&z);
     return *this;
 }
 
